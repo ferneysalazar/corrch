@@ -1,0 +1,1316 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <style>
+      body {
+        margin: 0px;
+        padding: 0px;
+      }
+      canvas {
+        border: 1px solid #666666;
+		background: rgba(255, 255, 255, 0);
+      }
+	  
+	  .canvas-style {
+		position:absolute;
+		display:block;
+	  }
+	  
+	  #ghostC {
+		display: none;
+		position: absolute;
+		top:200px;
+		left:200px;
+		opacitiy: 0.2;
+		z-index: -1;
+	  }
+	  
+	 #canvasContainer {
+		 position:relative;
+		 border: 1px dotted cyan;
+	 }
+
+	
+	.spot-details {
+		position: absolute;
+		height: 40px;
+		width:100px;
+		border-radius: 3px 3px 3px 3px;
+		-moz-border-radius: 3px 3px 3px 3px;
+		-webkit-border-radius: 3px 3px 3px 3px;
+		border: 2px solid #6a79bd;
+		padding:6px;
+		-webkit-box-shadow: 3px 4px 10px -4px rgba(0,0,0,0.75);
+		-moz-box-shadow: 3px 4px 10px -4px rgba(0,0,0,0.75);
+		box-shadow: 3px 4px 10px -4px rgba(0,0,0,0.75);	
+		background-color: rgba(255, 255, 255,0.5);	
+	}
+
+	.spot-details:after {
+		position: absolute;
+		content: "";
+		width: 0;
+		height: 0;
+		border-top: 1px solid;
+		border-bottom: 1px solid;
+		border-left: 2px solid;
+		border-right: 2px solid;
+		border-color: #6a79bd #6a79bd transparent  transparent;
+		left: -6px;
+		top: -2px;
+		transform: rotate(20deg);
+
+	}
+
+	#detailsInfo > div {
+		font-family: Trebuchet MS,Lucida Grande,Lucida Sans Unicode,Lucida Sans,Tahoma,sans-serif;
+		font-weight: normal;
+		margin-left:10px;
+	}
+	
+	#detailsInfo  div:first-child {
+		font-size: 14px;
+		color: #666666;
+	}
+
+	#detailsInfo  div:nth-child(2) {
+		padding-top: 10px;
+		font-size: 12px;
+		color: #799ace;
+		font-weight: bold;
+	}
+	</style>
+  </head>
+  <body>
+  
+	<a href="#" onclick="zxGenerate()">generate points</a>
+	<a href="#" onclick="zoomin()">zoomin</a>
+	<a href="#" onclick="zoomout()">zooumout</a>
+	<a href="#" onclick="up()">up</a>
+	<a href="#" onclick="down()">down</a>
+	<a href="#" onclick="left()">left</a>
+	<a href="#" onclick="right()">right</a>
+	<a href="#" onclick="resetzoom()">reset zoom</a>
+	<div class="canvas-container" id="canvasContainer"></div>
+  </body>
+
+<script>
+
+/*******************************
+*    G L O B A L  V A R S      *
+*******************************/
+
+var global = {};
+
+
+/*******************************
+*    F U N C T I O N S         *
+*******************************/
+
+calculateSpotRadius = function(count) {
+	
+	// calculate the size of the data spots according to a count or magnitude value
+	var _radius = global.gZoom * global.gPointScaleFactor * (count/global.gPointValueFactor);
+	if (_radius < 1 ) {
+		_radius = 1;
+	}
+	if (_radius > global.maxCircleRadius ) {
+		_radius = global.maxCircleRadius;
+	}
+	
+	return(_radius);
+}
+
+
+cancelCrossHair = function() {
+
+	var _ctx = cCanvas.getContext("2d");
+	_ctx.clearRect(0, 0, cCanvas.width, cCanvas.height);
+	global.crossHair = false;
+	
+	drawBackgroundGrid();
+	
+}
+
+
+cancelScrolling = function() {
+	
+	recoverDCanvas();
+	document.getElementById("ghostC").outerHTML = "";
+	global.gGhostImage = null;	
+}
+
+
+cancelSelection = function(pCanvas) {
+	if (pCanvas && pCanvas != undefined) {
+		var _ctx = pCanvas.getContext("2d");
+		_ctx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+		global.gDrawingRect = false;
+	}
+}
+
+cancelTimerCloseSpotDetails = function() {
+	if(global.gTimerCloseSpotDetails) {
+		clearInterval(global.gTimerCloseSpotDetails);
+		global.gTimerCloseSpotDetails = null;
+	}
+	
+}
+
+canvasCreation = function(w, h, idName){
+
+	var _dCanvas = document.createElement("canvas");
+	_dCanvas.classList.add("canvas-style");
+	_dCanvas.width = w;
+	_dCanvas.height = h;
+
+	//_dCanvas.style.top = "200px";
+	//_dCanvas.style.left = "200px";
+	
+	if (global.xAxisLabelsPos == "bottom") {
+		_dCanvas.style.top = "10px";
+		global.dCanvasTop = 10;
+	}
+	else {
+		_dCanvas.style.top = "30px";
+		global.dCanvasTop = 30;
+	}
+	
+	if (global.yAxisLabelsPos == "left") {
+		_dCanvas.style.left = "50px";
+		global.dCanvasLeft = 50;
+	}
+	else {
+		global.dCanvasLeft = 0;
+	}
+		
+	if (idName == "sCanvas") {
+		/*skin canvas*/
+		_dCanvas.style.top = "0px";
+		_dCanvas.style.left = "0px";
+		_dCanvas.width = w + 50;
+		_dCanvas.height = h + 30;
+	}
+	
+	_dCanvas.id = idName;
+	var _container = document.getElementById("canvasContainer");
+	_container.appendChild(_dCanvas);
+	
+	return(_dCanvas);
+};
+
+
+closeSpotDetails = function() {
+	
+	/*clear the ccanvas*/
+	var _cCanvas = document.getElementById('cCanvas');
+	var _ctx = _cCanvas.getContext('2d');
+	_ctx.clearRect(0, 0, cCanvas.width, cCanvas.height);
+	
+	var _element = document.getElementById("detailsInfo");
+	if(_element) {
+		_element.parentNode.removeChild(_element);
+	}
+	
+}
+	
+	
+createGhost  = function() {
+	
+	global.gGhostImage = canvasCreation(global.gW, global.gH, "ghostC");
+	
+	var _canvas = 	document.getElementById('dCanvas');
+	var _ctx= global.gGhostImage.getContext("2d");
+	_ctx.drawImage(_canvas, 0,0);
+	_ctx.globalAlpha = 0.2;
+
+}
+
+
+deleteCenter = function() {
+
+	var _canvas = document.getElementById('dCanvas');
+	var _context = _canvas.getContext('2d');
+
+
+	_context.beginPath();
+	_context.arc(global.gCenter.x, global.gH - global.gCenter.y, 3, 0, 2 * Math.PI, false);
+	_context.fillStyle = 'rgba(255, 255, 255, 1)';
+
+	_context.fill();
+	_context.lineWidth = 0;
+	
+}
+
+
+down = function() {
+	
+	global.gDy -= 10;
+  
+	newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
+	
+	gDraw();
+	
+	return false;
+}
+
+drawBackgroundGrid = function() {
+
+	var _dCanvas = document.getElementById('dCanvas');
+	var _h = _dCanvas.height;
+	var _w = _dCanvas.width;
+	
+	var _sCanvas = document.getElementById('sCanvas');
+	var _ctx = _sCanvas.getContext('2d');
+
+	_ctx.clearRect(0, 0, _sCanvas.width, _sCanvas.height);
+
+	var _rows = global.yAxisDivisions;
+	var _cols = global.xAxisDivisions;
+	var _posy;
+	
+	if (global.showHGrid) {	
+		for (var i = 0; i < _rows - 1; i++) {
+		
+			_posy = Math.floor( (_h/_rows) * (i+1) );
+			drawLine(_sCanvas, global.dCanvasLeft, _posy + global.dCanvasTop, dCanvas.width + global.dCanvasLeft, _posy+ global.dCanvasTop, "#437ad3", 0.3);
+		}
+	}
+	
+	if (global.showVGrid) {	
+		for (var i = 0; i < _cols - 1; i++) {
+		
+			_posx = Math.floor( (_w/_cols) * (i+1) );
+			drawLine(_sCanvas, _posx + global.dCanvasLeft, global.dCanvasTop, _posx + global.dCanvasLeft, dCanvas.height + global.dCanvasTop, "#437ad3", 0.3);
+		}
+	}
+
+	writeBackgroundLabels();
+}
+
+drawLine = function(pCanvas, posInix, posIniy, posEndx, posEndy, color, thick) {
+	var _ctx = pCanvas.getContext('2d');
+	_ctx.beginPath();
+	_ctx.setLineDash([]);
+
+	//var _realy =  y;
+
+	//horizontal
+	_ctx.moveTo(posInix, posIniy);
+	_ctx.lineTo(posEndx, posEndy);
+
+	_ctx.strokeStyle = color;
+	_ctx.lineWidth = thick;  	
+	_ctx.stroke();	
+	
+}
+
+drawCenter = function() {
+
+	var _canvas = document.getElementById('dCanvas');
+	var _context = _canvas.getContext('2d');
+
+
+	_context.beginPath();
+	_context.arc(global.gCenter.x, global.gH - global.gCenter.y, 3, 0, 2 * Math.PI, false);
+	_context.fillStyle = 'rgba(255, 0, 0, 0.3)';
+
+	_context.fill();
+	_context.lineWidth = 0;
+	
+}
+
+drawCrossHair = function(x, y) {
+	
+	var _cCanvas = document.getElementById('cCanvas');
+	var _ctx = _cCanvas.getContext('2d');
+
+	_ctx.clearRect(0, 0, cCanvas.width, cCanvas.height);
+	
+	_ctx.beginPath();
+	_ctx.setLineDash([4,4]);
+	var _realy =  y;
+	
+	//horizontal
+	_ctx.moveTo(0, _realy);
+	_ctx.lineTo(cCanvas.width, _realy);
+	
+	//vertical
+	_ctx.moveTo(x, 0);
+	_ctx.lineTo(x, global.gH );
+	
+	_ctx.strokeStyle = "#437ad3";
+	_ctx.lineWidth = 0.5;  	
+	
+	_ctx.stroke();	
+	
+	showCrossHairPos(x,y);
+}
+
+
+drawSelectionWindow = function(pCanvas, pos, dimension) {
+
+	var _ctx= pCanvas.getContext("2d");
+	
+	_ctx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+	_ctx.beginPath();
+	_ctx.setLineDash([1,2]);
+	_ctx.rect(pos.x, pos.y, dimension.w, dimension.h);
+	_ctx.strokeStyle = "#333333";
+	_ctx.lineWidth =0.5;  	
+	_ctx.stroke();
+	
+}
+
+enhanceSpot = function(x, y, radius) {
+
+	var _cCanvas = document.getElementById("cCanvas");
+	var _context = _cCanvas.getContext("2d");
+
+	_context.beginPath();
+	_context.arc(x, global.gH - y, radius, 0, 2 * Math.PI, false);
+	_context.strokeStyle = 'rgba(18, 135, 88, 1)';
+	_context.lineWidth = 3;	
+	_context.setLineDash([]);
+	_context.stroke();
+	
+}
+
+gDraw = function() {
+
+	var _canvas = document.getElementById('dCanvas');
+	var _context = _canvas.getContext('2d');
+	
+	var  _key;
+	
+	console.log("gZoom:" + global.gZoom);
+
+	_context.clearRect(0, 0, _canvas.width, _canvas.height);  
+
+	drawBackgroundGrid();
+	
+	global.xMap2.forEach( function(value, key, map) {
+
+		_key = key.split("-");
+
+		var _radius = calculateSpotRadius(value.count);
+
+		_context.beginPath();
+		_context.arc(_key[0], global.gH - _key[1], _radius, 0, 2 * Math.PI, false);
+		_context.fillStyle = 'rgba(18, 135, 88, 0.5)';
+		_context.fill();
+		_context.lineWidth = 0;
+
+	  });
+
+	drawCenter();
+
+
+	return false;
+}
+
+
+generate = function() {
+
+	for ( var i = 0;  i < 20000; i++ ) {
+	  var _x = Math.floor(Math.random() * global.gMaxx) + 1;
+	  var _y = Math.floor(Math.random() * global.gMaxy) + 1;
+	  global.xMap.set( "elem"+i, {x:_x, y:_y} );
+	}
+	
+	newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
+	
+	gDraw();
+
+	return false;
+}
+
+getCanvasPos = function() {
+	
+	var _x = parseInt(window.getComputedStyle(document.getElementById("dCanvas")).getPropertyValue("left"));	
+	var _y = parseInt(window.getComputedStyle(document.getElementById("dCanvas")).getPropertyValue("top"));
+	return({x: _x, y: _y});	
+}
+
+getMousePos = function(canvas, evt) {
+	var rect = canvas.getBoundingClientRect();
+	return {
+	  x: evt.clientX - rect.left,
+	  y: evt.clientY - rect.top
+	};
+}
+
+
+initGlobals = function() {
+
+    global.gCtrlKeyPressed = false;
+
+	global.xMap = new Map();
+	global.xMap2 = new Map();
+
+	global.gMaxx = 1000;
+	global.gMaxy = 1000;
+
+	global.gW = 700;
+	global.gH = 700;
+
+	global.gDrawingRect = false;
+	global.gDefaultZoom = 0.7;
+	global.gZoom = 0.7;
+
+	global.gDefaultDx = 0;
+	global.gDefaultDy = 0;
+
+	global.gDx = 0;
+	global.gDy = 0;
+
+	global.gCenter = {x: 0, y: 0};
+	global.gMousePos;
+
+	global.gPointScaleFactor = 2;
+	global.gPointValueFactor = 2;
+
+	global.gScrollStarted = false;
+
+	global.gGhostImage = null;
+	global.gGhostx = 0;
+	global.gGhosty = 0;
+	global.gTimerMove  = null;
+	
+	global.gSpotTreshold = 2;
+	
+	global.crossHair = false;
+	
+	global.showHGrid = true;
+	global.showVGrid = true;
+	global.xAxisLabelsPos = "bottom";
+	global.yAxisLabelsPos =  "left";
+	global.xAxisDivisions =  10;
+	global.yAxisDivisions =  10;
+
+	global.showxLabels =  true;	
+	global.showyLabels =  true;	
+	
+	global.maxCircleRadius = 20;
+	
+	global.gTimerCloseSpotDetails = null;
+};
+
+
+left = function() {
+	
+	global.gDx += 10;
+  
+	newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
+	
+	gDraw();
+	
+	return false;
+}
+
+
+mouseUpDrawSelectionWindow = function() {
+
+	if (mousePos.x == global.gMousePos.x && mousePos.y == global.gMousePos.y ) {
+		// is a normal 0click
+		if (global.gCtrlKeyPressed)  {
+			/* change the center focus position*/
+			deleteCenter();
+			global.gCenter = {x: mousePos.x, y: global.gH - mousePos.y};
+			drawCenter();
+		}
+	}
+	else {
+	
+		//perhaps drawing a window rect
+		_dW = mousePos.x - global.gMousePos.x;
+		_dH = mousePos.y - global.gMousePos.y;
+		
+		_d = _dW;
+		
+		if (_dH > _dW) {
+			_d = _dH;
+		}
+		
+		_dX = mousePos.x;
+		if (global.gMousePos.x < mousePos.x) {
+			_dX = global.gMousePos.x;
+		}
+		
+		_dY = mousePos.y;
+		if (global.gMousePos.y > mousePos.y) {
+			_dY = global.gMousePos.y;
+		}
+		_dY = global.gH - _dY;
+		
+		if (_d > 3) {
+			global.gZoom = global.gZoom * global.gW/_d;
+			global.gDx = (global.gDx + _dX) * global.gW/_d;
+			global.gDy = (global.gDy + _dY) * global.gW/_d;
+			
+			newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
+			
+			gDraw();
+		}
+	}
+	
+	cancelSelection(document.getElementById('cCanvas'));
+}
+
+
+mouseUpScrollCanvasContent = function() {
+	
+	recoverDCanvas();
+	global.gScrollStarted = false;
+	var _dx = mousePos.x - global.gMousePos.x;
+	var _dy = mousePos.y - global.gMousePos.y;
+		
+	scrollImage(_dx, _dy);
+}
+
+
+MouseWheelHandler = function(e) {
+
+	// cross-browser wheel delta
+	var e = window.event || e;
+	var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));
+	if (delta >0) {
+		zoomin();
+	}
+	else {
+		zoomout();
+	}
+
+	return false;
+}
+
+
+moveGhost = function(dx, dy) {
+
+	//clear the dCanvas
+	var _canvas = 	document.getElementById('dCanvas');
+	var _ctx= _canvas.getContext("2d");
+	_ctx.clearRect(0, 0, _canvas.width, _canvas.height);
+	
+	/*use the original position of the ghost gGhostx, gGhosty to positionate the ghost image according to a delta */
+	_ctx.drawImage(global.gGhostImage, dx, dy);
+}
+
+
+newzoom = function(maxx, maxy, w, h, z, dx, dy) {
+	
+	var _calcx, _calcy,_count, _key2, _obj;
+
+	global.xMap2 = new Map();
+
+	/* reduce the real values to a tiny map, grouping by scaling and rounding proximity 
+	 * as the scale z is shorter more real point go to the same graphic point */
+	 
+	 
+	global.xMap.forEach( function(value, key, map) {
+
+		_calcx = Math.round((value.x - dx/z)*z);    
+		_calcy = Math.round((value.y - dy/z)*z);
+
+		_real = [];
+		if (_calcx >= 0 && _calcx <= w &&
+			_calcy >= 0 && _calcy <= h) {
+
+			_count=0;
+			_key2 = _calcx + "-" + _calcy;
+			_obj = global.xMap2.get(_key2);
+
+			//if the point alrady exists, add one to the counter the point stores. To know how many real points are in a graphic point 
+			
+			if (_obj) {
+			  _count = _obj.count;
+			  _real = _obj.real;
+			}
+			
+			_real.push({x: value.x, y: value.y});
+			
+			//removing the duplicates
+			_set = new Set(_real);
+			_real = Array.from(_set);
+			
+			global.xMap2.set(_key2, {count: _count + 1, d: false, real: _real});
+			
+		}
+	});
+	
+	simpleDensityCleaning(3);
+}
+
+
+recenter = function() {
+	
+ var _centerx = Math.floor(global.gW/2);
+ var _centery = Math.floor(global.gH/2);
+ global.gCenter = {x: _centerx, y: _centery};
+}
+
+
+recoverDCanvas = function() {
+
+	if (global.gGhostImage) {
+		var _canvas = 	document.getElementById('dCanvas');
+		var _ctx= _canvas.getContext("2d");
+		_ctx.drawImage(global.gGhostImage, 0, 0);
+	}
+	
+}
+0
+
+resetzoom = function() {
+
+	initGlobals();
+
+	newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
+
+	gDraw();
+
+	return false;
+}
+
+
+right = function() {
+  
+	global.gDx -= 10;
+  
+	newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
+	
+	gDraw();
+	
+	return false;
+}
+
+
+scrollImage = function(dx, dy) {
+	
+	global.gDx = global.gDx - dx;
+	global.gDy = global.gDy + dy;
+	newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
+	document.getElementById("ghostC").outerHTML = "";
+	global.gGhostImage = null;	
+	gDraw();
+	
+}
+
+showCrossHairPos = function(x, y) {
+
+	drawBackgroundGrid();
+
+	var _dCanvas = document.getElementById('dCanvas');
+	var _h = _dCanvas.height;
+	var _w = _dCanvas.width;
+	
+	var _sCanvas = document.getElementById('sCanvas');
+	var _ctx = _sCanvas.getContext('2d');
+
+	var _rows = global.yAxisDivisions;
+	var _cols = global.xAxisDivisions;
+	var _posy;
+
+	//calculate the  axiis y labels position
+	var _axisYPos;
+	if (global.yAxisLabelsPos == "left") {
+		_axisYPos = global.dCanvasLeft - 5;
+		_shiftx = 50 + 5;
+	}
+	else {
+		_axisYPos = dCanvas.width + 5 + 20;
+		_shiftx = 6;
+	}
+	
+	var _axisXPos;
+	var _shifty
+	if (global.xAxisLabelsPos == "bottom") {
+		_axisXPos = dCanvas.height + 24;
+		_shifty = 15;
+	}
+	else {
+		_axisXPos = 20 + 3 ;
+		_shifty = 35;
+	}
+
+	_minRealx = global.gDx/global.gZoom;;
+	_minRealy = global.gDy/global.gZoom;;
+	_realW = global.gW/global.gZoom;
+	_realH = global.gH/global.gZoom;
+	
+	var _text = "";
+	
+	_posy = y +_shifty;
+	_realy = Math.floor( ((global.gH - y + global.gDy)/ global.gZoom));
+	_text = _realy.toString();
+	writeText(_axisYPos, _posy, _text, "right", "#437ad3");
+
+	_posx = x +_shiftx;
+	_realx = Math.floor( (x+ global.gDx)/global.gZoom);
+	_text = _realx.toString();
+	writeText(_posx, _axisXPos, _text, "right", "#437ad3");
+}
+
+showSpotDetailsInfo = function(posx, posy, realx, realy, spotRadius, spotCount, spotCenterx, spotCentery ) {
+
+	var _container = document.getElementById("canvasContainer");
+
+	/*first try to delete the show details div*/
+	cancelTimerCloseSpotDetails();
+	
+	closeSpotDetails();
+	
+	enhanceSpot(spotCenterx, spotCentery, spotRadius);
+	
+	/*create the new div*/
+	_div = document.createElement('div');
+	_div.id = 'detailsInfo';
+	_div.className = 'spot-details';
+	_posCanvas = getCanvasPos();
+	_div.style.left = posx + "px";
+	_div.style.top = posy + "px";
+	
+	_container.appendChild(_div);
+
+	_div2 = document.createElement('div');
+	_div2.innerHTML = realx + ", " + realy;
+	_div.appendChild(_div2);
+	_div2.addEventListener('mouseover', function(evt) {
+		cancelTimerCloseSpotDetails();
+     }, false);	  
+
+	if (spotCount > 1) {
+		_div3 = document.createElement('div');
+		_div3.innerHTML = spotCount + " points";
+		_div.appendChild(_div3);
+			
+		_div3.addEventListener('mouseover', function(evt) {
+			cancelTimerCloseSpotDetails();
+		 }, false);	  
+	}
+	
+	/*Add the onmouse out event*/
+	_div.addEventListener('mouseout', function(evt) {
+		global.gTimerCloseSpotDetails = setInterval(timerCloseSpotDetails, 200);
+     }, false);	  
+	 
+	_div.addEventListener('mouseover', function(evt) {
+			cancelTimerCloseSpotDetails();
+     }, false);	  
+
+	 
+}
+	
+	
+simpleDensityCleaning = function(radius) {
+	
+	global.xMap2.forEach( function(value, key, map) {
+
+		/*if not flagged to delete*/
+		if ( !value.d) {
+			_key = key.split("-");
+			_x = parseInt(_key[0]);
+			_y = parseInt(_key[1]);
+			_count = value.count;
+			for ( var iX = - radius;  iX < radius; iX ++ ) {
+				
+				_tX = _x + iX;
+				for ( var iY = - radius;  iY < radius; iY ++ ) {
+					
+					_tY = _y + iY;
+					
+					if(_tX != parseInt(_x) || _tY != parseInt(_y)) {
+						_el = global.xMap2.get(_tX + "-" + _tY);
+						if ( _el && _el != undefined ) {  
+							if (_el.count <= _count) {
+								/*flag the neighbour element to be deleted*/
+								global.xMap2.set(_tX + "-" + _tY, {count: _el.count, d:true});
+							}
+							else {
+								/*flag this element to be deleted*/
+								global.xMap2.set(key, {count: _count, d:true});
+								
+								//stop the cleancy for this element
+								_iX = radius;
+								_iY = radius;
+								
+							}
+						}
+					}					
+				}
+			}
+			
+		}
+	});
+		
+	/*create the new array with the elements not flagged to delete */
+	_xmap = new Map();
+	
+	global.xMap2.forEach( function(value, key, map) {
+
+		/*if not flagged to delete*/
+		if ( !value.d) {
+			_xmap.set(key, {count: value.count, real: value.real});
+		}
+		else {
+			/*some element was deleted*/
+			_someElementsDeleted = true;
+		}
+	});
+	
+	global.xMap2 = _xmap;
+	console.log("size: " +_xmap.size);
+}	
+
+
+timerCloseSpotDetails = function() {
+	closeSpotDetails();
+}	
+
+timerMouseMove = function() {
+	
+	var _evt = this;
+
+	/* The user has been standing a lot of time then search if the coordinates where the mouse is standing is over a data point */
+	var _canvas = document.getElementById('cCanvas');
+	var _context = _canvas.getContext('2d');
+
+	_mousePos = getMousePos(_canvas, _evt);
+	
+	var  _spotOver = verifySpotOver(_mousePos.x, _mousePos.y);
+	
+	if (_spotOver.value) {
+		_posCanvas = getCanvasPos();
+		
+		console.log("Checking for data point in: " + mousePos);
+		clearInterval(global.gTimerMove);
+		global.gTimerMove = null;
+		
+		_real = _spotOver.real[0];
+		
+		showSpotDetailsInfo(_mousePos.x + _posCanvas.x - 1, _mousePos.y + _posCanvas.y - 1, _real.x, _real.y, _spotOver.radius, _spotOver.count, _spotOver.x, _spotOver.y);
+	}
+}
+
+
+up = function() {
+ 
+	global.gDy += 10;
+  
+	newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
+	
+	gDraw();
+	
+	return false;
+}
+
+	  
+upperLeftCorner = function(pos1, pos2) {
+	
+	var _x = pos1.x;
+	if (pos2.x < _x) {
+		_x = pos2.x;
+	}
+	
+	var _y = pos1.y;
+	if (pos2.y < _y) {
+		_y = pos2.y;
+	}
+
+	return( { x: _x, y: _y } );
+}
+
+verifySpotOver = function(x, y) {
+
+	/*check if there is a drawing point on that position*/
+	var foundException = {};
+	var _x = 0;
+	var _y = 0;
+	var _radius;
+	var _count;
+	var _real = [];
+	
+	try {
+		global.xMap2.forEach( function(value, key, map) {
+			_key = key.split("-");
+			
+			var _realy = global.gH - _key[1];
+			_radius = calculateSpotRadius(value.count);
+			_count = value.count;
+			_real = value.real;
+			var _value = Math.pow(x - _key[0], 2) + Math.pow(y - _realy, 2)
+			if ( _value <= Math.pow(_radius + global.gSpotTreshold, 2)) {
+				//the point is into the spot circle
+				_x = _key[0];
+				_y = _key[1];
+				throw foundException;	
+			}
+		});
+		return {value:false};
+	} catch (e) {
+		if (e == foundException) {
+			return({value: true, x: _x, y: _y, radius: _radius, count: _count, real: _real });
+		}
+	}
+		
+}
+
+widthAndHeight = function(pos1, pos2) {
+	
+	var _w = Math.abs(pos1.x - pos2.x);
+	var _h = Math.abs(pos1.y - pos2.y);
+
+	return( { w: _w, h: _h } );
+}
+
+writeBackgroundLabels = function() {
+
+	var _dCanvas = document.getElementById('dCanvas');
+	var _h = _dCanvas.height;
+	var _w = _dCanvas.width;
+	
+	var _sCanvas = document.getElementById('sCanvas');
+	var _ctx = _sCanvas.getContext('2d');
+
+	var _rows = global.yAxisDivisions;
+	var _cols = global.xAxisDivisions;
+	var _posy;
+
+	//calculate the  axiis y labels position
+	var _axisYPos;
+	if (global.yAxisLabelsPos == "left") {
+		_axisYPos = global.dCanvasLeft - 5;
+		_shiftx = 50 + 5;
+	}
+	else {
+		_axisYPos = dCanvas.width + 5 + 20;
+		_shiftx = 6;
+	}
+	
+	var _axisXPos;
+	var _shifty
+	if (global.xAxisLabelsPos == "bottom") {
+		_axisXPos = dCanvas.height + 24;
+		_shifty = 15;
+	}
+	else {
+		_axisXPos = 20 + 3 ;
+		_shifty = 35;
+	}
+
+	_minRealx = global.gDx/global.gZoom;;
+	_minRealy = global.gDy/global.gZoom;;
+	_realW = global.gW/global.gZoom;
+	_realH = global.gH/global.gZoom;
+	
+	var _text = "";
+	if (global.showxLabels) {	
+		for (var i = 0; i < _rows; i ++ ) {
+		
+			_posy = global.gH - Math.floor( (_h/_rows) * (i + 1) ) + _shifty;
+			_realy = Math.floor( (_realH/_rows) * (i + 1) + _minRealy);
+			_text = _realy.toString();
+			writeText(_axisYPos, _posy, _text, "right", "#454f5e");
+		}
+	}
+
+	if (global.showyLabels) {	
+		for (var i = 0; i < _cols; i ++ ) {
+		
+			_posx = Math.floor( (_w/_cols) * (i + 1) ) + _shiftx;
+			_realx = Math.floor( (_realW/_cols) * (i + 1) + _minRealx);
+			_text = _realx.toString();
+			writeText(_posx, _axisXPos, _text, "right", "#454f5e");
+		}
+	}
+}
+
+writeText = function(x,y, text, align, color) {
+
+	var canvas = document.getElementById("sCanvas");
+	var context = canvas.getContext("2d");
+
+	context.fillStyle = color;
+	context.font = "normal 10px Arial";
+	context.textAlign = align; 	
+	context.fillText(text, x, y);
+}
+
+
+zoomin = function() {
+	
+	var _gZ1 = global.gZoom;
+	global.gZoom = global.gZoom * 1.05;
+	global.gDx = (global.gDx + global.gCenter.x) / ( _gZ1/global.gZoom) - global.gCenter.x;
+	global.gDy = (global.gDy + global.gCenter.y) / ( _gZ1/global.gZoom) - global.gCenter.y;
+
+	newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
+	
+	gDraw();
+
+	return false;
+}
+
+
+zoomout = function() {
+	
+	var _gZ1 = global.gZoom;
+	global.gZoom = global.gZoom / 1.05;
+	global.gDx = (global.gDx + global.gCenter.x) / ( _gZ1/global.gZoom) - global.gCenter.x;
+	global.gDy = (global.gDy + global.gCenter.y) / ( _gZ1/global.gZoom) - global.gCenter.y;
+
+	newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
+
+	gDraw();
+
+	return false;
+}
+
+
+zxGenerate = function() {
+
+	/*read the data from the server */
+
+	var chunkedUrl = 'http://localhost:1337';
+
+	fetch(chunkedUrl)
+	  .then(zxProcessChunkedResponse)
+	  .then(zxOnChunkedResponseComplete)
+	  .catch(zxOnChunkedResponseError)
+	;	
+
+	for ( var i = 0;  i < 20000; i++ ) {
+	  var _x = Math.floor(Math.random() * global.gMaxx) + 1;
+	  var _y = Math.floor(Math.random() * global.gMaxy) + 1;
+	  global.xMap.set( "elem"+i, {x:_x, y:_y} );
+	}
+	
+	newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
+	
+	gDraw();
+
+	return false;
+}
+
+
+
+zxOnChunkedResponseComplete = function(result) {
+  console.log('all done!', result);
+}
+
+zxOnChunkedResponseError =  function(err) {
+  console.error(err);
+}
+
+zxProcessChunkedResponse =  function(response) {
+  var text = '';
+  var reader = response.body.getReader();
+  var decoder = new TextDecoder();
+  
+  return readChunk();
+
+  function readChunk() {
+    return reader.read().then(appendChunks);
+  }
+
+ function appendChunks(result) {
+    var chunk = decoder.decode(result.value || new Uint8Array, {stream: !result.done});
+
+    var _json = JSON.parse(chunk);
+
+    console.log( _json.chunkN + " of " + _json.chunks );
+
+    _json.chunkPayLoad.forEach( function(item, i) {
+    	console.log(item.i);
+		global.xMap2.set(item.k, item.v);    	
+    });
+
+    gDraw();
+
+    if (result.done) {
+
+      console.log('returning')
+      return "done";
+    } else {
+
+      console.log('recursing')
+      return readChunk();
+    }
+  }
+}
+
+/*******************************
+*     E X E C U T I O N        *
+*******************************/
+
+initGlobals();
+
+recenter();
+
+
+/*creating skin canvas*/
+canvasCreation(global.gW, global.gH, "sCanvas");
+
+/*creating drawing canvas*/
+canvasCreation(global.gW, global.gH, "dCanvas");
+
+/*creating drawing canvas*/
+canvasCreation(global.gW, global.gH, "cCanvas");
+
+drawBackgroundGrid();
+
+writeText();
+
+/*******************************
+*        E V E N T S           *
+*******************************/
+
+document.onkeydown = function(e) {
+	if (e.ctrlKey) { 
+		
+		global.gCtrlKeyPressed = true;
+		global.gScrollStarted = false;
+		clearInterval(global.gTimerMove);
+
+	} 
+	
+	if (e.shiftKey) {
+		global.crossHair = true;
+	}
+}	
+
+document.onkeyup = function(e) {
+
+	/*detect if the ctrl key was released */
+	if (!e.ctrlKey && global.gCtrlKeyPressed) { 
+		
+		global.gCtrlKeyPressed = false;
+		cancelSelection(document.getElementById('cCanvas'));
+		cancelScrolling();
+	} 
+	
+	if (!e.shiftKey) {
+		cancelCrossHair();
+	}
+}	
+
+document.getElementById('cCanvas').addEventListener('mousedown', function(evt) {
+
+		clearInterval(global.gTimerMove);
+		
+		var _canvas = document.getElementById('cCanvas');
+
+		if (global.gCtrlKeyPressed) {
+			global.gDrawingRect = true;
+			global.gScrollStarted = false;
+		
+			global.gMousePos = getMousePos(_canvas, evt);
+			var message = 'Mouse position: ' + global.gMousePos.x + ',' + global.gMousePos.y;
+		}
+		else {
+			global.gScrollStarted = true;
+			global.gDrawingRect = false;
+			global.gMousePos = getMousePos(_canvas, evt);
+		}
+      }, false);	  
+
+	  
+document.getElementById('cCanvas').addEventListener('mouseup', function(evt) {
+
+		var _canvas = document.getElementById('cCanvas');
+		
+		var mousePos = getMousePos(_canvas, evt);
+		
+		if (global.gDrawingRect) {
+			
+			mouseUpDrawSelectionWindow();			
+		}
+		
+		if (global.gScrollStarted) {
+			
+			mouseUpScrollCanvasContent();
+		}
+		
+        var mousePos = getMousePos(_canvas, evt);
+        var message = 'Mouse position: ' + mousePos.x + ',' + mousePos.y;
+      }, false);	  
+
+	  
+/* Mouse Wheel */	  
+var cCanvas = document.getElementById('cCanvas');
+if (cCanvas.addEventListener) {
+	cCanvas.addEventListener("mousewheel", MouseWheelHandler, false);
+	cCanvas.addEventListener("DOMMouseScroll", MouseWheelHandler, false);
+}
+else  {
+	cCanvas.attachEvent("onmousewheel", MouseWheelHandler);
+}
+
+
+document.getElementById('cCanvas').addEventListener('mousemove', function(evt) {
+
+	var _cCanvas = document.getElementById('cCanvas');
+	var _context = _cCanvas.getContext('2d');
+
+	mousePos = getMousePos(_cCanvas, evt);
+
+	if (global.gDrawingRect || global.gScrollStarted) {
+	
+		_diag = Math.sqrt( Math.pow(Math.abs(mousePos.x - global.gMousePos.x), 2) + Math.pow(Math.abs(mousePos.y - global.gMousePos.y), 2) );
+
+		if (_diag > 3 && global.gDrawingRect) { 
+			/* the selection window */
+			var _upperLeftCorner = upperLeftCorner(mousePos, global.gMousePos);
+			var _dim = widthAndHeight(mousePos, global.gMousePos);
+			drawSelectionWindow(_cCanvas, _upperLeftCorner, _dim);
+		}			
+		if (_diag > 3 && global.gScrollStarted) { 
+			/* the contnent scrolling				*/
+			if (global.gGhostImage == null) {
+				/*Create the ghost image to scroll the content along wit the mouse pointer */
+				createGhost();
+			}
+			var _dx = mousePos.x - global.gMousePos.x;
+			var _dy = mousePos.y - global.gMousePos.y;
+			
+			moveGhost(_dx, _dy);
+		}		
+	}
+	else {
+		/*normal move no dragging*/
+		if( global.gTimerMove) {
+			/*while the user move the mouse the interval is cleared and reinitilized again*/
+			clearInterval(global.gTimerMove);
+		}
+		
+		global.gTimerMove = setInterval(timerMouseMove.bind(evt), 400);
+	}
+	
+	if (global.crossHair){
+		//draw cross hair
+		drawCrossHair(mousePos.x, mousePos.y);
+	}
+		
+  }, false);	  
+  
+  
+ document.getElementById('cCanvas').addEventListener('mouseout', function(evt) {
+
+		if( global.gTimerMove) {
+			/*while the user move the mouse the interval is cleared and reinitilized again*/
+			clearInterval(global.gTimerMove);
+		}
+		cancelSelection();
+		recoverDCanvas();
+		
+      }, false);	  
+ 
+
+ 
+</script>
+
+
+</html>
+
+
+
