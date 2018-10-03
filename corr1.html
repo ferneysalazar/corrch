@@ -411,7 +411,7 @@ gDraw = function() {
 
 
 generate = function() {
-
+/*
 	for ( var i = 0;  i < 20000; i++ ) {
 	  var _x = Math.floor(Math.random() * global.gMaxx) + 1;
 	  var _y = Math.floor(Math.random() * global.gMaxy) + 1;
@@ -421,7 +421,7 @@ generate = function() {
 	newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
 	
 	gDraw();
-
+*/
 	return false;
 }
 
@@ -1078,7 +1078,7 @@ zxGenerate = function() {
 	  .then(zxOnChunkedResponseComplete)
 	  .catch(zxOnChunkedResponseError)
 	;	
-
+/*
 	for ( var i = 0;  i < 20000; i++ ) {
 	  var _x = Math.floor(Math.random() * global.gMaxx) + 1;
 	  var _y = Math.floor(Math.random() * global.gMaxy) + 1;
@@ -1086,7 +1086,7 @@ zxGenerate = function() {
 	}
 	
 	newzoom(global.gMaxx, global.gMaxy, global.gW, global.gH, global.gZoom, global.gDx, global.gDy);
-	
+*/	
 	gDraw();
 
 	return false;
@@ -1095,7 +1095,10 @@ zxGenerate = function() {
 
 
 zxOnChunkedResponseComplete = function(result) {
+	console.log(global.xMap2);
   console.log('all done!', result);
+  gDraw();
+
 }
 
 zxOnChunkedResponseError =  function(err) {
@@ -1105,7 +1108,7 @@ zxOnChunkedResponseError =  function(err) {
 zxProcessChunkedResponse =  function(response) {
   var text = '';
   var reader = response.body.getReader();
-  var decoder = new TextDecoder();
+  var decoder = new TextDecoder('utf-8');
   
   return readChunk();
 
@@ -1114,18 +1117,24 @@ zxProcessChunkedResponse =  function(response) {
   }
 
  function appendChunks(result) {
-    var chunk = decoder.decode(result.value || new Uint8Array, {stream: !result.done});
+ 	console.log("<<<<<>>>>>");
+ 	console.log(result);
+ 	if (result && result.value && typeof result.value !== 'undefined') {
+	 	console.log(decoder.decode(result.value || new Uint8Array, {stream: !result.done}));
 
-    var _json = JSON.parse(chunk);
+	    var chunk = decoder.decode(result.value || new Uint8Array, {stream: !result.done});
 
-    console.log( _json.chunkN + " of " + _json.chunks );
+	    var _json = JSON.parse(chunk);
 
-    _json.chunkPayLoad.forEach( function(item, i) {
-    	console.log(item.i);
-		global.xMap2.set(item.k, item.v);    	
-    });
+    	console.log( _json.chunkN + " of " + _json.chunks );
 
-    gDraw();
+	    _json.chunkPayLoad.forEach( function(item, i) {
+	    	console.log(item.i);
+			global.xMap2.set(item.k, item.v);    	
+	    });
+
+    	gDraw();
+     }
 
     if (result.done) {
 
