@@ -111,8 +111,8 @@ calculateSpotRadius = function(count) {
 	
 	// calculate the size of the data spots according to a count or magnitude value
 	var _radius = global.gZoom * global.gPointScaleFactor * (count/global.gPointValueFactor);
-	if (_radius < 1 ) {
-		_radius = 1;
+	if (_radius < 2 ) {
+		_radius = 2;
 	}
 	if (_radius > global.maxCircleRadius ) {
 		_radius = global.maxCircleRadius;
@@ -1102,14 +1102,94 @@ zxOnChunkedResponseComplete = function(result) {
 }
 
 zxOnChunkedResponseError =  function(err) {
+console.log(xxxChunk);
+console.log("-- " +xxxChunk.length + " -- ");
+
   console.error(err);
 }
 
-zxProcessChunkedResponse =  function(response) {
+var xxxChunk;
+
+zxProcessChunkedResponse = function(response) {
   var text = '';
   var reader = response.body.getReader();
-  var decoder = new TextDecoder('utf-8');
-  
+  let charsReceived = 0;
+
+  // read() returns a promise that resolves
+  // when a value has been received
+  reader.read().then(function processText({ done, value }) {
+  	var chunk = zxUintToString(value);
+    // Result objects contain two properties:
+    // done  - true if the stream has already given you all its data.
+    // value - some data. Always undefined when done is true.
+    if (done) {
+      console.log("Stream complete");
+      //para.textContent = value;
+      return;
+    }
+
+    // value for fetch streams is a Uint8Array
+	console.log(chunk.length +  " -> " +chunk.slice(-10));    
+
+	var _json;
+	try {
+		_json = JSON.parse(chunk);
+
+		console.log( _json.chunkN + " of " + _json.chunks );
+
+	    _json.chunkPayLoad.forEach( function(item, i) {
+			global.xMap2.set(item.k, item.v);    	
+	    });
+
+		gDraw();
+		
+	}
+	catch(error) {
+		console.log(chunk);
+		console.error(error);
+
+    }
+    // Read some more, and call this function again
+    return reader.read().then(processText);
+  });
+}
+
+ zxUintToString = function(uintArray) {
+    var encodedString = String.fromCharCode.apply(null, uintArray);
+    return encodedString;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
   return readChunk();
 
   function readChunk() {
@@ -1117,19 +1197,16 @@ zxProcessChunkedResponse =  function(response) {
   }
 
  function appendChunks(result) {
- 	console.log("<<<<<>>>>>");
- 	console.log(result);
  	if (result && result.value && typeof result.value !== 'undefined') {
-	 	console.log(decoder.decode(result.value || new Uint8Array, {stream: !result.done}));
 
 	    var chunk = decoder.decode(result.value || new Uint8Array, {stream: !result.done});
-
+xxxChunk = chunk;	  
+  console.log("->"+chunk.length);
 	    var _json = JSON.parse(chunk);
 
     	console.log( _json.chunkN + " of " + _json.chunks );
 
 	    _json.chunkPayLoad.forEach( function(item, i) {
-	    	console.log(item.i);
 			global.xMap2.set(item.k, item.v);    	
 	    });
 
@@ -1147,6 +1224,7 @@ zxProcessChunkedResponse =  function(response) {
     }
   }
 }
+*/
 
 /*******************************
 *     E X E C U T I O N        *

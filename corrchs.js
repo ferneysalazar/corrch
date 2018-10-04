@@ -6,7 +6,7 @@ http.createServer(function (request, response) {
     response.setHeader('Access-Control-Request-Method', '*');
     response.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET');
     response.setHeader('Access-Control-Allow-Headers', '*');
-    response.setHeader('Content-Type', 'application/json; charset=UTF-8');
+    response.setHeader('Content-Type', 'text/plain');
     response.setHeader('Transfer-Encoding', 'chunked');
 
     if ( request.method === 'OPTIONS' ) {
@@ -164,7 +164,7 @@ console.log("xArray2.length: " +xArray2.length);
 
 sendChunk = function(response) {
 
-console.log("gLastChunkSent: " + gLastChunkSent);
+console.log("gLastChunkSent: " + gLastChunkSent + " de " + gMaxChunks);
     var initialRecord = gLastChunkSent * gRecordsxChunk;
     var  endRecord = (gLastChunkSent + 1) * gRecordsxChunk;
 
@@ -206,7 +206,7 @@ console.log("i: " + i + "  - gData.length: " + gData.length);
 /****************************
      S t a r t
 **************************/
-generateRandomValues(1000, 1000, 1000);
+generateRandomValues(4000, 1000, 1000);
 
 var gData = newzoom( 1000, 1000, 700, 700, 0.7, 0, 0);
 
@@ -219,7 +219,7 @@ var desiredChunkSize = 2*1024;   //300kBytes
 var gRecordsxChunk = Math.floor(desiredChunkSize/ averageRecordSize);
 var gMaxChunks = Math.ceil(gData.length / gRecordsxChunk); 
 var gLastChunkSent = 0;
-var gChunkInterval = 50; //milliseconds elapsed until next chunk sent.
+var gChunkInterval = 200; //milliseconds elapsed until next chunk sent.
 var gInterval;
 
 console.log("gRecordsxChunk: " + gRecordsxChunk ); 
