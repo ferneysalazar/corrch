@@ -111,8 +111,8 @@ calculateSpotRadius = function(count) {
 	
 	// calculate the size of the data spots according to a count or magnitude value
 	var _radius = global.gZoom * global.gPointScaleFactor * (count/global.gPointValueFactor);
-	if (_radius < 2 ) {
-		_radius = 2;
+	if (_radius < 1 ) {
+		_radius = 1;
 	}
 	if (_radius > global.maxCircleRadius ) {
 		_radius = global.maxCircleRadius;
@@ -1102,7 +1102,7 @@ zxOnChunkedResponseComplete = function(result) {
 }
 
 zxOnChunkedResponseError =  function(err) {
-console.log(xxxChunk);
+
 console.log("-- " +xxxChunk.length + " -- ");
 
   console.error(err);
@@ -1117,8 +1117,13 @@ zxProcessChunkedResponse = function(response) {
 
   // read() returns a promise that resolves
   // when a value has been received
+  var chunk = "";
+  var partialChunk = "";
+
   reader.read().then(function processText({ done, value }) {
-  	var chunk = zxUintToString(value);
+
+  	var chunk = partialChunk + zxUintToString(value);
+
     // Result objects contain two properties:
     // done  - true if the stream has already given you all its data.
     // value - some data. Always undefined when done is true.
@@ -1129,10 +1134,11 @@ zxProcessChunkedResponse = function(response) {
     }
 
     // value for fetch streams is a Uint8Array
-	console.log(chunk.length +  " -> " +chunk.slice(-10));    
+	console.log(chunk.length +  " -> " + chunk.slice(-10));    
 
 	var _json;
 	try {
+
 		_json = JSON.parse(chunk);
 
 		console.log( _json.chunkN + " of " + _json.chunks );
@@ -1143,14 +1149,18 @@ zxProcessChunkedResponse = function(response) {
 
 		gDraw();
 		
+		partialChunk = "";
 	}
 	catch(error) {
-		console.log(chunk);
-		console.error(error);
 
+		if (error.name.indexOf("Syntax") > -1) {
+			partialChunk = chunk;
+		}
     }
+
     // Read some more, and call this function again
     return reader.read().then(processText);
+
   });
 }
 
